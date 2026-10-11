@@ -59,7 +59,7 @@ export function clampChallengeDate(key: string): string {
 
 export function dayScore(record: DayRecord | undefined, habits: Habit[]): number {
   if (!habits.length) return 0;
-  const done = habits.filter((habit) => record?.completed[habit.id]).length;
+  const done = habits.filter((habit) => record?.completed?.[habit.id]).length;
   return Math.round((done / habits.length) * 100);
 }
 

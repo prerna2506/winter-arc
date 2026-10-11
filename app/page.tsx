@@ -6,9 +6,9 @@ import {
   Dumbbell, Footprints, Heart, Moon, MoreHorizontal, Plus, Salad, Settings2,
   Sunrise, Target, Trash2, Waves, X,
 } from "lucide-react";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AppData, DAY_COUNT, DEFAULT_HABITS, EMPTY_DAY, END_DATE, START_DATE,
+  AppData, DAY_COUNT, DEFAULT_HABITS, DayRecord, EMPTY_DAY, END_DATE, START_DATE,
   challengeDay, clampChallengeDate, dateKey, dateOffset, dayScore, inclusiveDates,
   parseDate, sleepMinutes,
 } from "@/lib/winter-arc";
@@ -42,6 +42,7 @@ export default function Home() {
   const [newHabit, setNewHabit] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [reviewMonth, setReviewMonth] = useState("2026-10");
+  const [sleepChartMode, setSleepChartMode] = useState<"daily" | "monthly">("daily");
 
   useEffect(() => {
     const current = getBrowserDate();
@@ -69,7 +70,7 @@ export default function Home() {
 
   const currentRecord = data.records[selectedDate] ?? EMPTY_DAY;
   const selectedScore = dayScore(currentRecord, data.habits);
-  const completedCount = data.habits.filter((habit) => currentRecord.completed[habit.id]).length;
+  const completedCount = data.habits.filter((habit) => currentRecord.completed?.[habit.id]).length;
   const selectedDay = challengeDay(selectedDate);
   const inFuture = selectedDate > today;
   const allDates = useMemo(() => inclusiveDates(START_DATE, today), [today]);
@@ -96,7 +97,7 @@ export default function Home() {
   const totalSleep = allDates.map((date) => sleepMinutes(data.records[date])).filter(Boolean);
   const averageSleep = totalSleep.length ? Math.round(totalSleep.reduce((sum, mins) => sum + mins, 0) / totalSleep.length) : 0;
   const totalPossible = allDates.length * data.habits.length;
-  const totalDone = allDates.reduce((sum, date) => sum + data.habits.filter((habit) => data.records[date]?.completed[habit.id]).length, 0);
+  const totalDone = allDates.reduce((sum, date) => sum + data.habits.filter((habit) => data.records[date]?.completed?.[habit.id]).length, 0);
   const overallScore = totalPossible ? Math.round((totalDone / totalPossible) * 100) : 0;
 
   function updateRecord(patch: Partial<(typeof EMPTY_DAY)>) {
@@ -106,7 +107,7 @@ export default function Home() {
     }));
   }
   function toggleHabit(id: string) {
-    const completed = { ...currentRecord.completed, [id]: !currentRecord.completed[id] };
+    const completed = { ...currentRecord.completed, [id]: !currentRecord.completed?.[id] };
     updateRecord({ completed });
   }
   function selectDate(date: string) {
@@ -189,7 +190,7 @@ export default function Home() {
                 <div className="habit-list">
                   {data.habits.map((habit, index) => {
                     const Icon = iconOptions[habit.icon] ?? Heart;
-                    const done = Boolean(currentRecord.completed[habit.id]);
+                    const done = Boolean(currentRecord.completed?.[habit.id]);
                     return <div key={habit.id} className={`habit-row ${done ? "is-done" : ""}`}>
                       <button className="habit-check" onClick={() => toggleHabit(habit.id)} disabled={inFuture} aria-label={`${done ? "Uncheck" : "Complete"} ${habit.name}`}>{done && <Check size={13} strokeWidth={2.6} />}</button>
                       <span className="habit-icon"><Icon size={17} strokeWidth={1.7} /></span>
@@ -230,7 +231,7 @@ export default function Home() {
 
               <section className="panel sleep-panel">
                 <div className="panel-heading sleep-heading"><div><div className="section-kicker">REST IS PART OF IT</div><h2>Sleep log</h2></div><Moon size={18} className="sleep-moon" /></div>
-                <div className="sleep-times"><label>BEDTIME<input type="time" value={currentRecord.sleepStart} onChange={(event) => updateRecord({ sleepStart: event.target.value })} disabled={inFuture} /></label><ArrowRight size={15} /><label>WAKE UP<input type="time" value={currentRecord.wakeTime} onChange={(event) => updateRecord({ wakeTime: event.target.value })} disabled={inFuture} /></label></div>
+                <div className="sleep-times"><label>TIME IN BED<input type="time" value={currentRecord.sleepStart} onChange={(event) => updateRecord({ sleepStart: event.target.value })} disabled={inFuture} /></label><ArrowRight size={15} /><label>TIME OUT OF BED<input type="time" value={currentRecord.wakeTime} onChange={(event) => updateRecord({ wakeTime: event.target.value })} disabled={inFuture} /></label></div>
                 <div className="sleep-result"><div><span className="sleep-result-icon"><Clock3 size={17} /></span><strong>{fmtDuration(sleepMinutes(currentRecord))}</strong></div><span className="sleep-status">{sleepMinutes(currentRecord) >= 420 && sleepMinutes(currentRecord) <= 540 ? "IN THE 7–9H ZONE" : "AIM FOR 7–9 HOURS"}</span></div>
                 <div className="sleep-foot"><span>SEASON AVERAGE</span><strong>{averageSleep ? fmtDuration(averageSleep) : "—"}</strong></div>
               </section>
@@ -239,6 +240,12 @@ export default function Home() {
               <button className="weekly-link" onClick={() => { setReviewMonth("weekly"); setPage("Reviews"); }}><span className="weekly-icon"><BookOpen size={16} /></span><span><strong>Weekly reflection</strong><small>Close the week with intention</small></span><ArrowRight size={15} /></button>
             </aside>
           </section>
+          <SleepChart
+            mode={sleepChartMode}
+            onModeChange={setSleepChartMode}
+            selectedDate={selectedDate}
+            records={data.records}
+          />
           <footer className="page-footer"><span>BUILT FOR THE LONG GAME</span><span>OCTOBER 01, 2026 <i>—</i> FEBRUARY 28, 2027</span></footer>
         </>}
 
@@ -277,6 +284,113 @@ export default function Home() {
       <nav className="mobile-nav" aria-label="Mobile navigation">{(["Today", "Calendar", "Reviews"] as Page[]).map((item) => { const Icon = item === "Today" ? Target : item === "Calendar" ? CalendarDays : BookOpen; return <button key={item} onClick={() => setPage(item)} className={page === item ? "active" : ""}><Icon size={19} /><span>{item}</span></button>; })}<button onClick={() => setShowSettings(true)}><Settings2 size={19} /><span>Habits</span></button></nav>
     </main>
   );
+}
+
+function SleepChart({ mode, onModeChange, selectedDate, records }: {
+  mode: "daily" | "monthly";
+  onModeChange: (mode: "daily" | "monthly") => void;
+  selectedDate: string;
+  records: Record<string, DayRecord>;
+}) {
+  const chartContainer = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(760);
+  useEffect(() => {
+    const container = chartContainer.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setChartWidth(Math.max(320, entry.contentRect.width)));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+  const selectedMonth = selectedDate.slice(0, 7);
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const monthStart = `${selectedMonth}-01` < START_DATE ? START_DATE : `${selectedMonth}-01`;
+  const monthEndKey = `${selectedMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+  const monthEnd = monthEndKey > END_DATE ? END_DATE : monthEndKey;
+  const dailyPoints = inclusiveDates(monthStart, monthEnd).map((key) => ({
+    key,
+    label: String(Number(key.slice(-2))),
+    minutes: sleepMinutes(records[key]),
+    nights: sleepMinutes(records[key]) > 0 ? 1 : 0,
+  }));
+  const monthlyPoints = ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02"].map((monthKey, index) => {
+    const [monthYear, monthNumber] = monthKey.split("-").map(Number);
+    const first = `${monthKey}-01` < START_DATE ? START_DATE : `${monthKey}-01`;
+    const lastKey = `${monthKey}-${String(new Date(monthYear, monthNumber, 0).getDate()).padStart(2, "0")}`;
+    const last = lastKey > END_DATE ? END_DATE : lastKey;
+    const nights = inclusiveDates(first, last).map((key) => sleepMinutes(records[key])).filter((minutes) => minutes > 0);
+    return {
+      key: monthKey,
+      label: ["OCT", "NOV", "DEC", "JAN", "FEB"][index],
+      minutes: nights.length ? Math.round(nights.reduce((sum, value) => sum + value, 0) / nights.length) : 0,
+      nights: nights.length,
+    };
+  });
+  const points = mode === "daily" ? dailyPoints : monthlyPoints;
+  const loggedPoints = points.filter((point) => point.minutes > 0);
+  const average = loggedPoints.length
+    ? Math.round(loggedPoints.reduce((sum, point) => sum + point.minutes, 0) / loggedPoints.length)
+    : 0;
+  const maxMinutes = Math.max(600, Math.ceil(Math.max(0, ...points.map((point) => point.minutes)) / 240) * 240);
+  const viewWidth = chartWidth;
+  const viewHeight = 250;
+  const left = 48;
+  const right = 12;
+  const top = 15;
+  const bottom = 211;
+  const plotWidth = viewWidth - left - right;
+  const plotHeight = bottom - top;
+  const slotWidth = plotWidth / Math.max(points.length, 1);
+  const chartPoints = points.map((point, index) => ({
+    point,
+    x: left + (index + 0.5) * slotWidth,
+    y: bottom - (point.minutes / maxMinutes) * plotHeight,
+  }));
+  const lineSegments: string[] = [];
+  let segment: string[] = [];
+  for (const chartPoint of chartPoints) {
+    if (chartPoint.point.minutes > 0) {
+      segment.push(`${chartPoint.x},${chartPoint.y}`);
+    } else if (segment.length) {
+      lineSegments.push(segment.join(" "));
+      segment = [];
+    }
+  }
+  if (segment.length) lineSegments.push(segment.join(" "));
+  const dailyLabels = new Set([1, 8, 15, 22, 29]);
+  const ticks = [0, maxMinutes / 2, maxMinutes];
+
+  return <section className="panel sleep-chart-panel">
+    <div className="sleep-chart-heading">
+      <div><div className="section-kicker">REST, OVER TIME</div><h2>Sleep rhythm</h2><p>{mode === "daily" ? `Nightly hours in ${parseDate(selectedDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })}` : "Average nightly sleep by month"}</p></div>
+      <div className="chart-mode" role="group" aria-label="Sleep chart view">
+        <button aria-pressed={mode === "daily"} className={mode === "daily" ? "active" : ""} onClick={() => onModeChange("daily")}>Daily</button>
+        <button aria-pressed={mode === "monthly"} className={mode === "monthly" ? "active" : ""} onClick={() => onModeChange("monthly")}>Monthly</button>
+      </div>
+    </div>
+    <div className="sleep-chart-summary"><span><i className="chart-legend-swatch" /> {mode === "daily" ? "HOURS SLEPT" : "MONTHLY AVERAGE"}</span><strong>{average ? fmtDuration(average) : "No sleep logged yet"}</strong><small>{loggedPoints.length} {mode === "daily" ? "nights" : "months"} with data</small></div>
+    <div className="sleep-chart-wrap" ref={chartContainer}>
+      <svg className="sleep-chart" viewBox={`0 0 ${viewWidth} ${viewHeight}`} role="img" aria-label={mode === "daily" ? `Daily sleep duration chart for ${parseDate(selectedDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })}` : "Monthly average sleep duration chart for the Winter Arc"}>
+        <rect x={left} y={bottom - (540 / maxMinutes) * plotHeight} width={plotWidth} height={(120 / maxMinutes) * plotHeight} className="chart-target-band" />
+        {ticks.map((tick) => {
+          const y = bottom - (tick / maxMinutes) * plotHeight;
+          return <g key={tick}><line x1={left} x2={viewWidth - right} y1={y} y2={y} className="chart-gridline" /><text x={left - 9} y={y + 3} textAnchor="end" className="chart-axis-label">{tick / 60}h</text></g>;
+        })}
+        {lineSegments.map((segmentPath, index) => <polyline key={`line-${index}`} points={segmentPath} className="sleep-line" />)}
+        {chartPoints.map(({ point, x, y }) => {
+          const selected = mode === "daily" && point.key === selectedDate;
+          const labelDay = mode === "daily" ? Number(point.label) : 0;
+          const labelVisible = mode === "monthly" || dailyLabels.has(labelDay);
+          const detail = point.minutes ? fmtDuration(point.minutes) : "No sleep logged";
+          const title = mode === "daily" ? `${fmtDate(point.key, { month: "short", day: "numeric" })}: ${detail}` : `${point.label}: ${point.minutes ? `${fmtDuration(point.minutes)} average across ${point.nights} nights` : "No nights logged"}`;
+          return <g key={point.key}>
+            {point.minutes > 0 && <circle cx={x} cy={y} r={selected ? 4.5 : 3.5} className={`sleep-point ${selected ? "selected" : ""}`}><title>{title}</title></circle>}
+            {labelVisible && <text x={x} y={bottom + 18} textAnchor="middle" className={`chart-x-label ${selected ? "selected" : ""}`}>{point.label}</text>}
+          </g>;
+        })}
+      </svg>
+    </div>
+    <div className="sleep-chart-note"><span>Target: 7–9 hours</span><span>{mode === "daily" ? "Select a date on the calendar to view another month" : "Monthly averages use logged nights only"}</span></div>
+  </section>;
 }
 
 function ReflectionField({ number, label, placeholder, value, onChange }: { number: string; label: string; placeholder: string; value: string; onChange: (value: string) => void }) {
