@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open winter-arc-beta-taupe.vercel.app
+Open (https://winter-arc-beta-taupe.vercel.app/)
 
 ## Included
 
